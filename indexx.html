@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caro 1vs1 v3.5 Pro - Online</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent: #3b82f6;
+            --border: #334155;
+        }
+        [data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+            --accent: #2563eb;
+            --border: #cbd5e1;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+            position: relative;
+        }
+        h2 { text-align: center; margin-top: 0; font-size: 20px; }
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 8px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 2px;
+            background: var(--border);
+            padding: 2px;
+            border-radius: 8px;
+            margin: 10px auto;
+            max-width: 420px;
+            aspect-ratio: 1/1;
+        }
+        .cell {
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell.x { color: #ef4444; }
+        .cell.o { color: #3b82f6; }
+        .hidden { display: none !important; }
+        .flex-row { display: flex; gap: 8px; }
+        .avatar-preview {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent);
+        }
+        /* Menu 3 gạch */
+        .menu-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+        .dropdown-menu {
+            position: absolute;
+            right: 15px;
+            top: 55px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+            width: 180px;
+            overflow: hidden;
+        }
+        .dropdown-menu button {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            padding: 12px;
+            text-align: left;
+            width: 100%;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .dropdown-menu button:hover { background: var(--border); }
+    </style>
+</head>
+<body>
+
+    <!-- MÀN HÌNH ĐĂNG NHẬP (TỰ ĐỘNG LƯU TÊN) -->
+    <div class="container" id="login-screen">
+        <h2>Đăng Nhập Người Chơi</h2>
+        <label>Tên của bạn:</label>
+        <input type="text" id="player-name" placeholder="Nhập tên đại cá...">
+        
+        <label>Quốc gia:</label>
+        <select id="player-country">
+            <option value="🇻🇳">🇻🇳 Việt Nam</option>
+            <option value="🇺🇸">🇺🇸 Mỹ</option>
+            <option value="🇯🇵">🇯🇵 Nhật Bản</option>
+            <option value="🇰🇷">🇰🇷 Hàn Quốc</option>
+        </select>
+
+        <label>Link Ảnh Đại Diện (Avatar URL):</label>
+        <div class="flex-row" style="align-items: center;">
+            <input type="text" id="player-avatar" placeholder="Dán link ảnh..." value="https://i.imgur.com/6VBx3io.png">
+            <img id="avatar-preview" class="avatar-preview" src="https://i.imgur.com/6VBx3io.png" alt="Preview">
+        </div>
+
+        <button class="btn" onclick="saveProfileAndEnter()">Vào Game Ngay</button>
+    </div>
+
+    <!-- MÀN HÌNH CHÍNH (BÀN CỜ + MENU 3 GẠCH) -->
+    <div class="container hidden" id="game-main-screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 8px;">
+            <div>
+                <span id="user-info" style="font-weight: bold; color: var(--accent);"></span>
+            </div>
+            <div style="position: relative;">
+                <button class="menu-btn" onclick="toggleMenu()">☰</button>
+                <div class="dropdown-menu" id="dropdown-menu">
+                    <button onclick="openLobbyModal()">🌐 Tạo / Vào Phòng</button>
+                    <button onclick="restartGame()">🔄 Chơi Lại Phòng Này</button>
+                    <button onclick="backToLobby()">🚪 Ra Sảnh Chính</button>
+                    <button style="color: #ef4444;" onclick="deleteCurrentRoom()">🗑️ Xóa Phòng Này</button>
+                    <button onclick="toggleTheme()">🌓 Đổi Giao Diện</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-status" style="text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 14px;">Chưa vào phòng - Bấm ☰ để tạo phòng</div>
+        
+        <div class="board" id="game-board"></div>
+    </div>
+
+    <!-- MODAL TẠO / VÀO PHÒNG -->
+    <div class="container hidden" id="lobby-modal" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:200; max-width:400px; border:2px solid var(--accent);">
+        <h2>Quản Lý Phòng 1vs1</h2>
+        <button class="btn" onclick="createRoom()">Tạo Phòng Mới</button>
+        <hr style="border-color: var(--border); margin: 15px 0;">
+        <label>Hoặc nhập mã phòng:</label>
+        <input type="text" id="room-code-input" placeholder="Nhập mã 6 số...">
+        <button class="btn" style="background: #10b981;" onclick="joinRoom()">Vào Phòng</button>
+        <button class="btn" style="background: #64748b; margin-top: 15px;" onclick="closeLobbyModal()">Đóng</button>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://caro-online-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    let myData = {
+        name: "",
+        country: "🇻🇳",
+        avatar: "https://i.imgur.com/6VBx3io.png",
+        symbol: "X"
+    };
+    let currentRoomId = null;
+    let isMyTurn = false;
+    let mySymbol = "X";
+    let roomListenerRef = null;
+
+    const bannedKeywords = ["admin", "hack", "shit", "fuck", "lồn", "cặc", "cu", "đụ", "địt", "đéo", "cc", "vl", "vcl", "dm", "dkm", "💀", "🖕", "🔞", "💩"];
+
+    // Tự động nạp tên đã lưu từ trước (nếu có)
+    window.onload = function() {
+        let savedName = localStorage.getItem('caro_player_name');
+        let savedCountry = localStorage.getItem('caro_player_country');
+        let savedAvatar = localStorage.getItem('caro_player_avatar');
+
+        if (savedName) document.getElementById('player-name').value = savedName;
+        if (savedCountry) document.getElementById('player-country').value = savedCountry;
+        if (savedAvatar) {
+            document.getElementById('player-avatar').value = savedAvatar;
+            document.getElementById('avatar-preview').src = savedAvatar;
+        }
+    };
+
+    document.getElementById('player-avatar').addEventListener('input', (e) => {
+        let url = e.target.value.trim();
+        if(url) document.getElementById('avatar-preview').src = url;
+    });
+
+    function sanitizeInput(text) {
+        let lower = text.toLowerCase();
+        for (let word of bannedKeywords) {
+            if (lower.includes(word)) return false;
+        }
+        return true;
+    }
+
+    function saveProfileAndEnter() {
+        let name = document.getElementById('player-name').value.trim();
+        let country = document.getElementById('player-country').value;
+        let avatar = document.getElementById('player-avatar').value.trim() || "https://i.imgur.com/6VBx3io.png";
+
+        if (!name) {
+            alert('Vui lòng nhập tên của đại ca!');
+            return;
+        }
+        if (!sanitizeInput(name)) {
+            alert('Tên chứa từ ngữ hoặc icon bị cấm!');
+            return;
+        }
+
+        // Lưu vào bộ nhớ trình duyệt
+        localStorage.setItem('caro_player_name', name);
+        localStorage.setItem('caro_player_country', country);
+        localStorage.setItem('caro_player_avatar', avatar);
+
+        myData = { name, country, avatar, symbol: "X" };
+
+        document.getElementById('user-info').innerText = `${country} ${name}`;
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('game-main-screen').classList.remove('hidden');
+        
+        buildBoard();
+        openLobbyModal(); // Tự động bật bảng tạo phòng khi vào game
+    }
+
+    function toggleMenu() {
+        let menu = document.getElementById('dropdown-menu');
+        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function openLobbyModal() {
+        document.getElementById('dropdown-menu').style.display = 'none';
+        document.getElementById('lobby-modal').classList.remove('hidden');
+    }
+
+    function closeLobbyModal() {
+        document.getElementById('lobby-modal').classList.add('hidden');
+    }
+
+    function buildBoard() {
+        const boardEl = document.getElementById('game-board');
+        boardEl.innerHTML = "";
+        for (let i = 0; i < 225; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.index = i;
+            cell.onclick = () => makeMove(i);
+            boardEl.appendChild(cell);
+        }
+    }
+
+    function createRoom() {
+        let roomId = Math.floor(100000 + Math.random() * 900000).toString();
+        currentRoomId = roomId;
+        mySymbol = "X";
+
+        let roomData = {
+            status: "waiting",
+            board: Array(225).fill(""),
+            turn: "X",
+            playerX: myData,
+            playerO: null
+        };
+
+        db.ref('rooms/' + roomId).set(roomData).then(() => {
+            closeLobbyModal();
+            listenRoom(roomId);
+            alert(`Tạo phòng thành công! Mã phòng của bạn là: ${roomId}`);
+        });
+    }
+
+    function joinRoom() {
+        let roomId = document.getElementById('room-code-input').value.trim();
+        if (!roomId) {
+            alert('Vui lòng nhập mã phòng!');
+            return;
+        }
+
+        db.ref('rooms/' + roomId).once('value', (snapshot) => {
+            let room = snapshot.val();
+            if (!room) {
+                alert('Không tìm thấy phòng này!');
+                return;
+            }
+            if (room.playerO) {
+                alert('Phòng đã đầy!');
+                return;
+            }
+
+            currentRoomId = roomId;
+            mySymbol = "O";
+
+            db.ref('rooms/' + roomId).update({
+                status: "playing",
+                playerO: myData
+            }).then(() => {
+                closeLobbyModal();
+                listenRoom(roomId);
+            });
+        });
+    }
+
+    function listenRoom(roomId) {
+        if (roomListenerRef) roomListenerRef.off();
+
+        roomListenerRef = db.ref('rooms/' + roomId);
+        roomListenerRef.on('value', (snapshot) => {
+            let room = snapshot.val();
+            if (!room) {
+                document.getElementById('game-status').innerText = "Phòng đã bị xóa hoặc giải tán!";
+                buildBoard();
+                return;
+            }
+
+            let cells = document.querySelectorAll('.cell');
+            room.board.forEach((val, idx) => {
+                cells[idx].innerText = val;
+                cells[idx].className = `cell ${val.toLowerCase()}`;
+            });
+
+            isMyTurn = (room.turn === mySymbol && room.status === "playing");
+            
+            let statusText = document.getElementById('game-status');
+            if (room.status === "waiting") {
+                statusText.innerText = `Phòng: ${roomId} | Đang đợi đối thủ...`;
+            } else if (room.status === "playing") {
+                statusText.innerText = isMyTurn ? `Phòng: ${roomId} | Đến lượt bạn (${mySymbol})!` : `Phòng: ${roomId} | Đợi đối thủ đi...`;
+            }
+        });
+    }
+
+    function makeMove(index) {
+        if (!currentRoomId || !isMyTurn) return;
+        
+        db.ref(`rooms/${currentRoomId}/board/${index}`).once('value', (snapshot) => {
+            if (snapshot.val() !== "") return;
+
+            let nextTurn = mySymbol === "X" ? "O" : "X";
+            let updates = {};
+            updates[`board/${index}`] = mySymbol;
+            updates[`turn`] = nextTurn;
+
+            db.ref(`rooms/${currentRoomId}`).update(updates);
+        });
+    }
+
+    function restartGame() {
+        document.getElementById('dropdown-menu').style.display = 'none';
+        if (!currentRoomId) {
+            alert('Bạn chưa ở trong phòng nào!');
+            return;
+        }
+        db.ref(`rooms/${currentRoomId}`).update({
+            board: Array(225).fill(""),
+            turn: "X",
+            status: "playing"
+        });
+    }
+
+    function backToLobby() {
+        document.getElementById('dropdown-menu').style.display = 'none';
+        if (roomListenerRef) roomListenerRef.off();
+        currentRoomId = null;
+        buildBoard();
+        document.getElementById('game-status').innerText = "Đã rời phòng - Bấm ☰ để vào phòng mới";
+        openLobbyModal();
+    }
+
+    function deleteCurrentRoom() {
+        document.getElementById('dropdown-menu').style.display = 'none';
+        if (currentRoomId) {
+            db.ref(`rooms/${currentRoomId}`).remove().then(() => {
+                alert('Đã xóa phòng này thành công!');
+                backToLobby();
+            });
+        } else {
+            alert('Không có phòng nào để xóa!');
+        }
+    }
+
+    function toggleTheme() {
+        let current = document.documentElement.getAttribute('data-theme');
+        document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+
+    // Chống F12 và chuột phải
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && (e.key === 'U' || e.key === 's' || e.key === 'S'))) {
+            e.preventDefault();
+            return false;
+        }
+    });
+    document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>
