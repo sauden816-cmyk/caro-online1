@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caro 1vs1 Final Pro - Online</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent: #3b82f6;
+            --border: #334155;
+        }
+        [data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+            --accent: #2563eb;
+            --border: #cbd5e1;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background 0.3s, color 0.3s;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+        }
+        h1, h2 { text-align: center; margin-top: 0; }
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 10px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 2px;
+            background: var(--border);
+            padding: 2px;
+            border-radius: 8px;
+            margin: 15px auto;
+            max-width: 450px;
+            aspect-ratio: 1/1;
+        }
+        .cell {
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell.x { color: #ef4444; }
+        .cell.o { color: #3b82f6; }
+        .hidden { display: none !important; }
+        .flex-row { display: flex; gap: 10px; }
+        .avatar-preview {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="login-screen">
+        <h2>Cấu Hình Người Chơi v3.4</h2>
+        <label>Tên của bạn:</label>
+        <input type="text" id="player-name" placeholder="Nhập tên đại cá...">
+        
+        <label>Quốc gia:</label>
+        <select id="player-country">
+            <option value="🇻🇳">🇻🇳 Việt Nam</option>
+            <option value="🇺🇸">🇺🇸 Mỹ</option>
+            <option value="🇯🇵">🇯🇵 Nhật Bản</option>
+            <option value="🇰🇷">🇰🇷 Hàn Quốc</option>
+        </select>
+
+        <label>Link Ảnh Đại Diện (Avatar URL):</label>
+        <div class="flex-row" style="align-items: center;">
+            <input type="text" id="player-avatar" placeholder="Dán link ảnh vào đây..." value="https://i.imgur.com/6VBx3io.png">
+            <img id="avatar-preview" class="avatar-preview" src="https://i.imgur.com/6VBx3io.png" alt="Preview">
+        </div>
+
+        <button class="btn" onclick="saveProfileAndLobby()">Vào Sảnh Trận Đấu</button>
+    </div>
+
+    <div class="container hidden" id="lobby-screen">
+        <h2>Sảnh Caro 1vs1</h2>
+        <p>Xin chào, <span id="display-name" style="font-weight:bold; color:var(--accent);"></span></p>
+        <button class="btn" onclick="createRoom()">Tạo Phòng Mới</button>
+        <hr style="border-color: var(--border); margin: 20px 0;">
+        <label>Nhập mã phòng để vào:</label>
+        <input type="text" id="room-code-input" placeholder="Nhập mã phòng...">
+        <button class="btn" style="background: #10b981;" onclick="joinRoom()">Vào Phòng</button>
+    </div>
+
+    <div class="container hidden" id="game-screen">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="room-title">Phòng: ---</h3>
+            <button class="btn" style="width: auto; padding: 6px 12px; margin: 0;" onclick="toggleTheme()">Đổi Giao Diện</button>
+        </div>
+        <div id="game-status" style="text-align: center; font-weight: bold; margin-bottom: 10px;">Đang chờ người chơi...</div>
+        
+        <div class="board" id="game-board"></div>
+        <button class="btn" style="background: #ef4444;" onclick="leaveRoom()">Rời Phòng</button>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://caro-online-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    let myData = {
+        name: "",
+        country: "🇻🇳",
+        avatar: "https://i.imgur.com/6VBx3io.png",
+        symbol: "X"
+    };
+    let currentRoomId = null;
+    let isMyTurn = false;
+    let mySymbol = "X";
+
+    const bannedKeywords = ["admin", "hack", "shit", "fuck", "lồn", "cặc", "cu", "đụ", "địt", "đéo", "cc", "vl", "vcl", "dm", "dkm", "💀", "🖕", "🔞", "💩"];
+
+    document.getElementById('player-avatar').addEventListener('input', (e) => {
+        let url = e.target.value.trim();
+        if(url) document.getElementById('avatar-preview').src = url;
+    });
+
+    function sanitizeInput(text) {
+        let lower = text.toLowerCase();
+        for (let word of bannedKeywords) {
+            if (lower.includes(word)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function saveProfileAndLobby() {
+        let name = document.getElementById('player-name').value.trim();
+        let country = document.getElementById('player-country').value;
+        let avatar = document.getElementById('player-avatar').value.trim();
+
+        if (!name) {
+            alert('Vui lòng nhập tên của đại ca!');
+            return;
+        }
+
+        if (!sanitizeInput(name)) {
+            alert('Tên chứa từ ngữ hoặc icon không hợp lệ / bị cấm!');
+            return;
+        }
+
+        myData.name = name;
+        myData.country = country;
+        myData.avatar = avatar || "https://i.imgur.com/6VBx3io.png";
+
+        document.getElementById('display-name').innerText = `${country} ${name}`;
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+    }
+
+    function createRoom() {
+        let roomId = Math.floor(100000 + Math.random() * 900000).toString();
+        currentRoomId = roomId;
+        mySymbol = "X";
+
+        let roomData = {
+            status: "waiting",
+            board: Array(225).fill(""),
+            turn: "X",
+            playerX: myData,
+            playerO: null
+        };
+
+        db.ref('rooms/' + roomId).set(roomData).then(() => {
+            enterGameScreen(roomId);
+            listenRoom(roomId);
+        });
+    }
+
+    function joinRoom() {
+        let roomId = document.getElementById('room-code-input').value.trim();
+        if (!roomId) {
+            alert('Vui lòng nhập mã phòng!');
+            return;
+        }
+
+        db.ref('rooms/' + roomId).once('value', (snapshot) => {
+            let room = snapshot.val();
+            if (!room) {
+                alert('Không tìm thấy phòng này!');
+                return;
+            }
+            if (room.playerO) {
+                alert('Phòng đã đầy người chơi!');
+                return;
+            }
+
+            currentRoomId = roomId;
+            mySymbol = "O";
+
+            db.ref('rooms/' + roomId).update({
+                status: "playing",
+                playerO: myData
+            }).then(() => {
+                enterGameScreen(roomId);
+                listenRoom(roomId);
+            });
+        });
+    }
+
+    function enterGameScreen(roomId) {
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        document.getElementById('room-title').innerText = `Mã Phòng: ${roomId}`;
+        buildBoard();
+    }
+
+    function buildBoard() {
+        const boardEl = document.getElementById('game-board');
+        boardEl.innerHTML = "";
+        for (let i = 0; i < 225; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.index = i;
+            cell.onclick = () => makeMove(i);
+            boardEl.appendChild(cell);
+        }
+    }
+
+    function listenRoom(roomId) {
+        db.ref('rooms/' + roomId).on('value', (snapshot) => {
+            let room = snapshot.val();
+            if (!room) return;
+
+            let cells = document.querySelectorAll('.cell');
+            room.board.forEach((val, idx) => {
+                cells[idx].innerText = val;
+                cells[idx].className = `cell ${val.toLowerCase()}`;
+            });
+
+            isMyTurn = (room.turn === mySymbol && room.status === "playing");
+            
+            let statusText = document.getElementById('game-status');
+            if (room.status === "waiting") {
+                statusText.innerText = "Đang đợi đối thủ vào phòng...";
+            } else if (room.status === "playing") {
+                statusText.innerText = isMyTurn ? "Đến lượt đại ca đi!" : "Đợi đối thủ đi nước tiếp theo...";
+            }
+        });
+    }
+
+    function makeMove(index) {
+        if (!isMyTurn) return;
+        
+        db.ref(`rooms/${currentRoomId}/board/${index}`).once('value', (snapshot) => {
+            if (snapshot.val() !== "") return;
+
+            let nextTurn = mySymbol === "X" ? "O" : "X";
+            let updates = {};
+            updates[`board/${index}`] = mySymbol;
+            updates[`turn`] = nextTurn;
+
+            db.ref(`rooms/${currentRoomId}`).update(updates);
+        });
+    }
+
+    function leaveRoom() {
+        if (currentRoomId) {
+            db.ref(`rooms/${currentRoomId}`).remove();
+        }
+        location.reload();
+    }
+
+    function toggleTheme() {
+        let current = document.documentElement.getAttribute('data-theme');
+        document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+
+    // Chống F12 và chuột phải
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || (e.ctrlKey && (e.key === 'U' || e.key === 's' || e.key === 'S'))) {
+            e.preventDefault();
+            return false;
+        }
+    });
+    document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>
